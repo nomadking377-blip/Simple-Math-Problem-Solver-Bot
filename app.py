@@ -30,12 +30,16 @@ llm=ChatGroq(model="openai/gpt-oss-120b",groq_api_key=groq_api_key)
 
 ## Initializing the tools
 wikipedia_wrapper=WikipediaAPIWrapper()
+
+def safe_wikipedia(query: str) -> str:
+    try:
+        return wikipedia_wrapper.run(query)
+    except Exception:
+        return "Wikipedia is unavailable right now. Answer from your own knowledge and mention that it could not be verified."
+
 wikipedia_tool=Tool(
     name="Wikipedia",
-    func=wikipedia_wrapper.run,
-    description="A tool for searching the Internet to find the vatious information on the topics mentioned"
-
-)
+    func=safe_wikipedia,
 
 ## Initializa the MAth tool
 
