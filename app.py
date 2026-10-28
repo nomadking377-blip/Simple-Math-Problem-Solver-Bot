@@ -164,7 +164,7 @@ footer_html = """
     </style>
 
     <div class="footer">
-        Developed by <b>Laavanjan</b> | © Faculty of IT B22
+        Developed by <b>Saifalikhan</b> | © Faculty of IT 
     </div>
 """
 
