@@ -5,25 +5,27 @@ from langchain.prompts import PromptTemplate
 from langchain_community.utilities import WikipediaAPIWrapper
 from langchain.agents.agent_types import AgentType
 from langchain.agents import Tool, initialize_agent
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.callbacks import StreamlitCallbackHandler
 import os
 from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 ## Langsmith Tracking
-os.environ["LANGCHAIN_API_KEY"]=os.getenv("LANGCHAIN_API_KEY")
-os.environ["LANGCHAIN_TRACING_V2"]="true"
-os.environ["LANGCHAIN_PROJECT"]=os.getenv("LANGCHAIN_PROJECT")
+# os.environ["LANGCHAIN_API_KEY"]=os.getenv("LANGCHAIN_API_KEY")
+# os.environ["LANGCHAIN_TRACING_V2"]="true"
+# os.environ["LANGCHAIN_PROJECT"]=os.getenv("LANGCHAIN_PROJECT")
 
 
 groq_api_key = os.getenv("GROQ_API_KEY")  # Fetch the Groq API Key from .env file
 
-## Set upi the Stramlit app
+## Set upi the Stramlit apppython -m streamlit run app.py
 st.set_page_config(page_title="Text To MAth Problem Solver And Data Serach Assistant",page_icon="🧮")
 st.title("Text To Math Problem Solver Uing llama3")
 
 
-llm=ChatGroq(model="llama-3.3-70b-versatile",groq_api_key=groq_api_key)
+llm=ChatGroq(model="openai/gpt-oss-120b",groq_api_key=groq_api_key)
 
 
 ## Initializing the tools
@@ -37,11 +39,20 @@ wikipedia_tool=Tool(
 
 ## Initializa the MAth tool
 
-math_chain=LLMMathChain.from_llm(llm=llm)
+import numexpr
+
+def safe_calculator(expression: str) -> str:
+    try:
+        cleaned = expression.strip().strip("`").strip('"').strip("'")
+        result = numexpr.evaluate(cleaned)
+        return str(result.item() if hasattr(result, "item") else result)
+    except Exception as e:
+        return f"Could not calculate: {e}"
+
 calculator=Tool(
     name="Calculator",
-    func=math_chain.run,
-    description="A tools for answering math related questions. Only input mathematical expression need to bed provided"
+    func=safe_calculator,
+    description="A tool for answering math related questions. Only input a mathematical expression, like (5-2)+(7-3)"
 )
 
 prompt="""
@@ -60,20 +71,22 @@ prompt_template=PromptTemplate(
 chain=LLMChain(llm=llm,prompt=prompt_template)
 
 reasoning_tool=Tool(
-    name="Reasoning tool",
+    name="Reasoning_tool",
     func=chain.run,
     description="A tool for answering logic-based and reasoning questions."
 )
 
 ## initialize the agents
 
-assistant_agent=initialize_agent(
-    tools=[wikipedia_tool,calculator,reasoning_tool],
-    llm=llm,
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-    verbose=False,
-    handle_parsing_errors=True
-)
+agent_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful math assistant. Use the Calculator tool for arithmetic, the Wikipedia tool for facts, and the Reasoning tool for logic questions. Give a clear step-by-step explanation and the final answer."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+
+all_tools = [wikipedia_tool, calculator, reasoning_tool]
+agent = create_tool_calling_agent(llm, all_tools, agent_prompt)
+assistant_agent = AgentExecutor(agent=agent, tools=all_tools, verbose=False, handle_parsing_errors=True)
 
 if "messages" not in st.session_state:
     st.session_state["messages"]=[
@@ -93,8 +106,7 @@ if st.button("find my answer"):
             st.chat_message("user").write(question)
 
             st_cb=StreamlitCallbackHandler(st.container(),expand_new_thoughts=False)
-            response=assistant_agent.run(st.session_state.messages,callbacks=[st_cb]
-                                         )
+            response=assistant_agent.invoke({"input": question}, {"callbacks": [st_cb]})["output"]
             st.session_state.messages.append({'role':'assistant',"content":response})
             st.write('### Response:')
             st.success(response)

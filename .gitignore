@@ -1,0 +1,6 @@
+.env
+venv/
+.venv/
+__pycache__/
+app_backup.py
+terminal
