@@ -40,7 +40,8 @@ def safe_wikipedia(query: str) -> str:
 wikipedia_tool=Tool(
     name="Wikipedia",
     func=safe_wikipedia,
-
+    description="A tool for searching the Internet to find various information on the topics mentioned"
+)
 ## Initializa the MAth tool
 
 import numexpr
